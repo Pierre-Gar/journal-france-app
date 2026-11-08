@@ -466,7 +466,7 @@ function viewLogin(message) {
       h("h1", {}, "Mon Journal France"),
       h("div", { class: "rule" }),
       h("p", {}, ""),
-      h("p", {}, "Saisissez votre jeton GitHub. Il reste dans ce navigateur et ne sert qu'à lire votre dépôt privé."),
+      h("p", {}, "Saisissez votre jeton GitHub. Il reste dans ce navigateur et sert uniquement à lire votre dépôt privé et à lancer vos actions."),
       message && h("p", { class: "error" }, message),
       h("form", { onsubmit: (event) => {
         event.preventDefault();
