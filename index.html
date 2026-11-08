@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
-  <title>Mon Journal France</title>
+  <title>Le Journal</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <div id="app"></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="print-root"></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

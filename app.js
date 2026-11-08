@@ -1,4 +1,4 @@
-// Mon Journal France. Cette page ne contient aucune donnée : tout est lu dans le dépôt privé
+// Le Journal. Cette page ne contient aucune donnée : tout est lu dans le dépôt privé
 // avec le jeton de son propriétaire. Le contenu venant du web n'est jamais interprété comme
 // du HTML : tout passe par des nœuds de texte créés par h().
 
@@ -16,6 +16,7 @@ const STATUS = {
   preview: "Aperçu",
 };
 const KINDS = { official: "Source officielle", industry: "Industriel", specialist: "Presse spécialisée", press: "Presse", social: "Réseau social" };
+const FREQUENCIES = [[1, "Chaque jour"], [2, "Tous les 2 jours"], [3, "Tous les 3 jours"], [7, "Chaque semaine"], [14, "Toutes les 2 semaines"], [30, "Chaque mois"]];
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MAIN_NAV = [["#/", "À la une"], ["#/evenements", "Événements"], ["#/archives", "Archives"], ["#/recherche", "Recherche"], ["#/reglages", "Réglages"]];
 
@@ -69,6 +70,8 @@ const asDate = (value) => new Date(`${value}T12:00:00`);
 const longDate = (value) => asDate(value).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDate = (value) => asDate(value).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 const monthLabel = (value) => asDate(value).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+const weekday = (value) => asDate(value).toLocaleDateString("fr-FR", { weekday: "long" });
+const journalTitle = (value) => `Journal du ${shortDate(value).replace(/^1 /, "1er ")}`;
 const plural = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
 const normalize = (text) => (text || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -146,15 +149,87 @@ function eventChip(story) {
   return h("a", { class: "chip", href: `#/evenement/${event.id}` }, `${event.timeline.length} étapes · ${story.stage || "Suivi"}`);
 }
 
-function storyCard(day, story, showDate) {
+function periodChip(story) {
+  return story.window_days > 1 ? h("span", { class: "chip" }, `Bilan sur ${story.window_days} jours`) : null;
+}
+
+function storyCard(day, story, { showDate, hideTheme } = {}) {
   return h("article", { class: `story t-${story.theme}` },
     h("div", { class: "meta" },
-      h("a", { class: "kicker", href: `#/rubrique/${story.theme}` }, themeLabel(story.theme)),
+      !hideTheme && h("a", { class: "kicker", href: `#/rubrique/${story.theme}` }, themeLabel(story.theme)),
       statusNode(story.status),
       showDate && h("span", { class: "status s-reported" }, shortDate(day))),
     h("h3", {}, h("a", { href: articleHref(day, story) }, story.headline)),
     h("p", {}, stripCitations(story.short_article)),
-    eventChip(story));
+    h("div", { class: "meta" }, eventChip(story), periodChip(story)));
+}
+
+const pdfButton = (action) => h("button", { class: "button secondary small", type: "button", onclick: action }, "Exporter en PDF");
+
+function printImage(story) {
+  if (!story.image || safeHref(story.image) === "#") return null;
+  return h("img", { class: "np-img", src: story.image, alt: "", referrerpolicy: "no-referrer", onerror: (event) => event.target.remove() });
+}
+
+const sourceLine = (story) => h("div", { class: "np-sources" }, `Sources : ${story.sources.map((source) => source.publisher).join(", ")}`);
+const paragraphs = (text) => text.split(/\n\s*\n/).map((paragraph) => h("p", {}, stripCitations(paragraph)));
+
+function sheetHead(day, detail) {
+  return h("header", { class: "np-head" },
+    h("div", { class: "np-over" }, detail),
+    h("h1", {}, journalTitle(day)),
+    h("div", { class: "np-rule" }));
+}
+
+function editionSheet(edition) {
+  const [lead, ...others] = [...edition.stories].sort((a, b) => b.importance - a.importance);
+  const sections = data.index.themes
+    .map((theme) => ({ ...theme, stories: others.filter((story) => story.theme === theme.id) }))
+    .filter((section) => section.stories.length);
+  return h("div", { class: "np" },
+    sheetHead(edition.date, `${weekday(edition.date)} · ${plural(edition.stories.length, "article")}`),
+    h("section", { class: "np-lead" },
+      h("div", { class: "np-kicker" }, themeLabel(lead.theme)),
+      h("h2", {}, lead.headline),
+      printImage(lead),
+      h("div", { class: "np-lead-text" }, paragraphs(lead.long_article), sourceLine(lead))),
+    sections.map((section) => h("section", { class: "np-section" },
+      h("h2", { class: "np-rubric" }, section.label),
+      h("div", { class: "np-cols" }, section.stories.map((story, index) => h("article", { class: "np-item" },
+        h("h3", {}, story.headline),
+        index === 0 && printImage(story),
+        h("p", {}, stripCitations(story.short_article)),
+        sourceLine(story)))))));
+}
+
+function articleSheet(day, story) {
+  return h("div", { class: "np" },
+    sheetHead(day, themeLabel(story.theme)),
+    h("section", { class: "np-lead" },
+      h("h2", {}, story.headline),
+      printImage(story),
+      h("div", { class: "np-lead-text" }, story.long_article.split(/\n\s*\n/).map((paragraph) => h("p", {}, paragraph))),
+      story.contradictions && h("p", { class: "np-note" }, `Contradiction entre sources : ${story.contradictions}`),
+      h("ol", { class: "np-list" }, story.sources.map((source) => h("li", {}, `${source.publisher} : ${source.url}`)))));
+}
+
+async function printSheet(sheet, title) {
+  const holder = document.getElementById("print-root");
+  const previousTitle = document.title;
+  holder.replaceChildren(sheet);
+  document.body.classList.add("printing");
+  const images = [...holder.querySelectorAll("img")];
+  await Promise.race([
+    Promise.allSettled(images.map((image) => image.decode())),
+    new Promise((resolve) => { setTimeout(resolve, 6000); }),
+  ]);
+  document.title = title; // nom proposé pour le fichier PDF
+  window.addEventListener("afterprint", () => {
+    document.body.classList.remove("printing");
+    holder.replaceChildren();
+    document.title = previousTitle;
+  }, { once: true });
+  window.print();
 }
 
 function shell(content, { nav, theme, date } = {}) {
@@ -162,8 +237,8 @@ function shell(content, { nav, theme, date } = {}) {
   return h("div", {},
     h("div", { class: "shell" },
       h("header", { class: "masthead" },
-        h("div", { class: "masthead-date" }, today ? longDate(today) : "Votre journal"),
-        h("a", { class: "masthead-title", href: "#/" }, "Mon Journal France"),
+        h("div", { class: "masthead-date" }, today ? weekday(today) : "Votre journal"),
+        h("a", { class: "masthead-title", href: "#/" }, today ? journalTitle(today) : "Le Journal"),
         h("div", { class: "rule" }),
         h("nav", { class: "mainnav", "aria-label": "Navigation principale" },
           MAIN_NAV.map(([href, label]) => h("a", { href, "aria-current": nav === href ? "page" : null }, label))))),
@@ -187,12 +262,13 @@ function frontPage(edition) {
     .map((theme) => ({ ...theme, stories: stories.filter((story) => story.theme === theme.id && story !== lead && !essentials.includes(story)) }))
     .filter((section) => section.stories.length);
   return [
+    h("div", { class: "page-actions" }, pdfButton(() => printSheet(editionSheet(edition), journalTitle(edition.date)))),
     h("section", { class: "front" },
       h("article", { class: `lead t-${lead.theme}` },
         h("div", { class: "meta" }, h("a", { class: "kicker", href: `#/rubrique/${lead.theme}` }, themeLabel(lead.theme)), statusNode(lead.status)),
         h("h2", {}, h("a", { href: articleHref(edition.date, lead) }, lead.headline)),
         h("p", {}, stripCitations(lead.short_article)),
-        eventChip(lead)),
+        h("div", { class: "meta" }, eventChip(lead), periodChip(lead))),
       h("aside", { class: "essentials" },
         h("div", { class: "essentials-title" }, "L'essentiel"),
         essentials.map((story, index) => h("div", { class: `brief t-${story.theme}` },
@@ -225,7 +301,7 @@ function viewTheme(id) {
     h("h1", { class: "page-title" }, themeLabel(id)),
     h("p", { class: "page-sub" }, plural(items.length, "article")),
     items.length
-      ? h("div", { class: "grid" }, items.map(({ day, story }) => storyCard(day, story, true)))
+      ? h("div", { class: "grid" }, items.map(({ day, story }) => storyCard(day, story, { showDate: true, hideTheme: true })))
       : notice("Aucun article dans cette rubrique pour le moment.")), { theme: id });
 }
 
@@ -253,8 +329,10 @@ async function viewArticle(day, id) {
     h("div", { class: "meta" },
       h("a", { class: "kicker", href: `#/rubrique/${story.theme}` }, themeLabel(story.theme)),
       statusNode(story.status),
-      h("a", { class: "status s-reported", href: `#/edition/${day}` }, `Édition du ${shortDate(day)}`)),
+      h("a", { class: "status s-reported", href: `#/edition/${day}` }, `Édition du ${shortDate(day)}`),
+      periodChip(story)),
     h("h1", {}, story.headline),
+    h("div", { class: "page-actions start" }, pdfButton(() => printSheet(articleSheet(day, story), story.headline))),
     h("div", { class: "article-body" }, story.long_article.split(/\n\s*\n/).map((paragraph) => h("p", {}, citations(paragraph, story.sources)))),
     story.contradictions && h("div", { class: "callout" }, h("strong", {}, "Contradiction entre sources. "), story.contradictions),
     h("div", { class: "block-title" }, "Sources"),
@@ -351,7 +429,7 @@ function viewSearch() {
       return words.every((word) => text.includes(word));
     });
     results.replaceChildren(...(found.length
-      ? found.slice(0, 60).map(({ day, story }) => storyCard(day, story, true))
+      ? found.slice(0, 60).map(({ day, story }) => storyCard(day, story, { showDate: true }))
       : [notice("Aucun article ne correspond.")]));
   });
   setTimeout(() => input.focus());
@@ -367,6 +445,12 @@ function hourSelect(value, label) {
     Array.from({ length: 24 }, (_, hour) => h("option", { value: hour, selected: hour === value ? "selected" : null }, `${String(hour).padStart(2, "0")} h`)));
 }
 
+function everySelect(value, label) {
+  const options = FREQUENCIES.some(([days]) => days === value) ? FREQUENCIES : [...FREQUENCIES, [value, `Tous les ${value} jours`]];
+  return h("select", { class: "select", "aria-label": label },
+    options.map(([days, text]) => h("option", { value: days, selected: days === value ? "selected" : null }, text)));
+}
+
 function viewSettings() {
   const settings = data.settings;
   if (!settings) return shell(notice("Réglages indisponibles."), { nav: "#/reglages" });
@@ -374,6 +458,7 @@ function viewSettings() {
     id, label,
     stories: numberInput(settings.themes[id].stories, 0, 15, `Articles par édition : ${label}`),
     inMail: h("input", { type: "checkbox", checked: settings.themes[id].in_mail }),
+    every: everySelect(settings.themes[id].every_days, `Fréquence : ${label}`),
   }));
   const editionHour = hourSelect(settings.edition_hour, "Heure de l'édition");
   const mail = settings.mail;
@@ -407,14 +492,14 @@ function viewSettings() {
     if (!weekdays.length) return toast("Choisissez au moins un jour d'envoi.");
     const payload = {
       edition_hour: Number(editionHour.value),
-      themes: Object.fromEntries(themeInputs.map((theme) => [theme.id, { stories: Number(theme.stories.value), in_mail: theme.inMail.checked }])),
+      themes: Object.fromEntries(themeInputs.map((theme) => [theme.id, { stories: Number(theme.stories.value), in_mail: theme.inMail.checked, every_days: Number(theme.every.value) }])),
       mail: { enabled: enabled.checked, frequency: frequency.value, every_n_days: Number(everyN.value), weekdays, hour: Number(mailHour.value) },
     };
     await runAction(save, () => dispatch("settings.yml", { settings: JSON.stringify(payload) }), "Réglages envoyés : ils s'appliquent en une minute environ.");
   } }, "Enregistrer les réglages");
 
   const generate = h("button", { class: "button secondary", type: "button", onclick: () =>
-    runAction(generate, () => dispatch("edition.yml", { action: "generate" }), "Édition lancée : comptez environ dix minutes.") }, "Générer une édition");
+    runAction(generate, () => dispatch("edition.yml", { action: "generate" }), "Toutes les rubriques sont relancées : comptez environ dix minutes.") }, "Tout générer maintenant");
   const sendMail = h("button", { class: "button secondary", type: "button", onclick: () =>
     runAction(sendMail, () => dispatch("edition.yml", { action: "mail" }), "Envoi du mail lancé.") }, "M'envoyer le mail maintenant");
 
@@ -422,13 +507,13 @@ function viewSettings() {
     h("h1", { class: "page-title article" }, "Réglages"),
     h("section", { class: "panel" },
       h("h2", {}, "Édition quotidienne"),
-      h("p", { class: "panel-sub" }, "Chaque article consomme une part de votre abonnement Claude. Réduisez le nombre d'articles pour l'économiser."),
+      h("p", { class: "panel-sub" }, "Une rubrique réglée sur « Chaque semaine » est rédigée une fois tous les 7 jours et couvre les 7 jours écoulés. La collecte reste quotidienne et ne consomme pas votre abonnement Claude ; seule la rédaction le fait."),
       h("div", { class: "row" }, h("span", { class: "row-label" }, "Heure de préparation"), editionHour),
-      h("div", { class: "row" }, h("span", { class: "row-label" }, "Rubrique"), h("span", { class: "panel-sub" }, "Articles et envoi par mail")),
+      h("div", { class: "row" }, h("span", { class: "row-label" }, "Rubrique"), h("span", { class: "panel-sub" }, "Articles, fréquence, envoi par mail")),
       themeInputs.map((theme) => h("div", { class: "row" },
         h("span", { class: "row-label" }, theme.label),
-        h("div", { class: "controls" }, theme.stories, h("label", { class: "check" }, theme.inMail, "Dans le mail")))),
-      h("div", { class: "row" }, h("span", { class: "row-label" }, "Total par édition"), total)),
+        h("div", { class: "controls" }, theme.stories, theme.every, h("label", { class: "check" }, theme.inMail, "Dans le mail")))),
+      h("div", { class: "row" }, h("span", { class: "row-label" }, "Articles si toutes les rubriques paraissent"), total)),
     h("section", { class: "panel" },
       h("h2", {}, "Envoi par mail"),
       h("p", { class: "panel-sub" }, "Le mail regroupe toutes les nouvelles parues depuis le précédent envoi, dans les rubriques cochées."),
@@ -463,7 +548,7 @@ function viewLogin(message) {
   return h("div", { class: "login" },
     h("div", { class: "login-card" },
       h("div", { class: "masthead-date" }, "Accès privé"),
-      h("h1", {}, "Mon Journal France"),
+      h("h1", {}, "Le Journal"),
       h("div", { class: "rule" }),
       h("p", {}, ""),
       h("p", {}, "Saisissez votre jeton GitHub. Il reste dans ce navigateur et sert uniquement à lire votre dépôt privé et à lancer vos actions."),
@@ -504,7 +589,7 @@ async function render() {
     const [view, title] = await route();
     if (current !== renderId) return;
     root.replaceChildren(view);
-    document.title = `${title} · Mon Journal France`;
+    document.title = `${title} · Le Journal`;
     window.scrollTo(0, 0);
   } catch (error) {
     if (current !== renderId) return;
