@@ -191,8 +191,7 @@ function editionSheet(edition) {
     h("section", { class: "np-lead" },
       h("div", { class: "np-kicker" }, themeLabel(lead.theme)),
       h("h2", {}, lead.headline),
-      printImage(lead),
-      h("div", { class: "np-lead-text" }, paragraphs(lead.long_article), sourceLine(lead))),
+      h("div", { class: "np-lead-text" }, printImage(lead), paragraphs(lead.long_article), sourceLine(lead))),
     sections.map((section) => h("section", { class: "np-section" },
       h("h2", { class: "np-rubric" }, section.label),
       h("div", { class: "np-cols" }, section.stories.map((story, index) => h("article", { class: "np-item" },
@@ -207,8 +206,7 @@ function articleSheet(day, story) {
     sheetHead(day, themeLabel(story.theme)),
     h("section", { class: "np-lead" },
       h("h2", {}, story.headline),
-      printImage(story),
-      h("div", { class: "np-lead-text" }, story.long_article.split(/\n\s*\n/).map((paragraph) => h("p", {}, paragraph))),
+      h("div", { class: "np-lead-text" }, printImage(story), story.long_article.split(/\n\s*\n/).map((paragraph) => h("p", {}, paragraph))),
       story.contradictions && h("p", { class: "np-note" }, `Contradiction entre sources : ${story.contradictions}`),
       h("ol", { class: "np-list" }, story.sources.map((source) => h("li", {}, `${source.publisher} : ${source.url}`)))));
 }
