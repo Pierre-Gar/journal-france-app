@@ -16,7 +16,7 @@ const STATUS = {
   preview: "Aperçu",
 };
 const KINDS = { official: "Source officielle", industry: "Industriel", specialist: "Presse spécialisée", press: "Presse", social: "Réseau social" };
-const FREQUENCIES = [[1, "Chaque jour"], [2, "Tous les 2 jours"], [3, "Tous les 3 jours"], [7, "Chaque semaine"], [14, "Toutes les 2 semaines"], [30, "Chaque mois"]];
+const FREQUENCIES = [[1, "Chaque jour"], [2, "Tous les 2 jours"], [3, "Tous les 3 jours"], [6, "Tous les 6 jours"], [7, "Chaque semaine"], [14, "Toutes les 2 semaines"], [30, "Chaque mois"]];
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MAIN_NAV = [["#/", "À la une"], ["#/evenements", "Événements"], ["#/archives", "Archives"], ["#/recherche", "Recherche"], ["#/reglages", "Réglages"]];
 
